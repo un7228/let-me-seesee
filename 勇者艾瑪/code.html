@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG 戰鬥系統範例</title>
+    <style>
+        /* --- General Styles --- */
+        body {
+            font-family: sans-serif;
+            background-color: #e0e0e0; /* Light gray background for contrast */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* --- Battle Interface Layout --- */
+        #battle-container {
+            border: 2px solid #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px; /* Max width for the battle area */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        #battle-interface {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px; /* Space between elements */
+        }
+
+        /* --- Enemy Area --- */
+        #enemy-area {
+            text-align: center;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 80%;
+        }
+
+        /* --- Player Section (Visual + Panel) --- */
+        #player-section {
+            display: flex;
+            justify-content: space-around; /* Space between visual and panel */
+            align-items: flex-end; /* Align bottom */
+            width: 100%;
+            gap: 20px;
+        }
+
+        /* --- Player Character Visual Area --- */
+        #player-character-area {
+            position: relative; /* Needed for absolute positioning of children */
+            width: 150px; /* Adjust if needed based on image aspect ratio */
+            height: 200px; /* Adjust if needed based on image aspect ratio */
+            flex-shrink: 0; /* Prevent shrinking */
+            display: flex; /* Use flex to help center/align */
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        #player-character-img {
+            /* position: absolute; */ /* Using flex alignment instead */
+            /* bottom: 0; */
+            /* left: 0; */
+            max-width: 100%; /* Ensure image fits container width */
+            max-height: 100%; /* Ensure image fits container height */
+            height: auto; /* Maintain aspect ratio */
+            object-fit: contain; /* Scale down if needed, maintaining aspect ratio */
+            /* transition: transform 0.1s ease-out; Combined with animation */
+        }
+
+        #slash-effect {
+            position: absolute;
+            /* Adjust position relative to character - MAY NEED TWEAKING */
+            top: 30%; /* Adjust based on character and effect image */
+            left: 55%; /* Adjust based on character and effect image */
+            width: 100px; /* Adjust size of the effect */
+            height: auto;
+            display: none; /* Initially hidden */
+            opacity: 0;
+            transform: rotate(-15deg); /* Keep or adjust rotation */
+            pointer-events: none; /* Prevent interaction */
+            z-index: 10; /* Ensure effect is above character */
+            filter: brightness(1.1); /* Optional: make it slightly brighter */
+        }
+
+
+        /* --- Player Action Panel Grid --- */
+        #player-panel {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .player-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two equal columns */
+            grid-template-rows: auto auto auto; /* Three rows, auto height */
+            gap: 10px;
+            padding: 10px;
+            border: 1px solid #555;
+            background-color: #444; /* Darker panel background */
+            border-radius: 5px;
+            color: white;
+        }
+
+        .grid-item {
+            padding: 10px 15px;
+            border: 1px solid #666;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9em;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 55px;
+        }
+
+        /* --- Button & Status Styles --- */
+        .action-button {
+            background-color: #3a5a9a;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            font-weight: bold;
+        }
+
+        .action-button:hover:not(:disabled) {
+            background-color: #507bc7;
+        }
+
+        .action-button:active:not(:disabled) {
+            background-color: #2a4a8a;
+            transform: scale(0.98);
+        }
+
+        .action-button:disabled {
+            background-color: #777;
+            cursor: not-allowed;
+            color: #ccc;
+        }
+
+        .status-display {
+            background-color: #2a2a2a; /* Dark background for status */
+            color: #eee;
+        }
+
+        .status-display span:first-child { /* HP/MP Label */
+            font-weight: bold;
+            margin-bottom: 3px;
+            font-size: 0.8em;
+        }
+         .status-display span:last-child { /* HP/MP Text */
+            font-size: 0.9em;
+         }
+
+
+        /* --- HP/MP Bars --- */
+        .hp-bar-container, .mp-bar-container {
+            width: 90%;
+            height: 8px;
+            background-color: #555;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+
+        .hp-bar {
+            height: 100%;
+            background-color: #4CAF50; /* Green HP */
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .mp-bar {
+            height: 100%;
+            background-color: #2196F3; /* Blue MP */
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        /* --- Message Log --- */
+        #message-log {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            color: #333;
+            min-height: 60px;
+            max-height: 150px; /* Limit height */
+            overflow-y: auto; /* Add scroll if needed */
+            width: 90%;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        /* --- ANIMATION STYLES --- */
+
+        /* Character Lunge Animation */
+        @keyframes player-lunge {
+          0% { transform: translateX(0) scale(1); }
+          50% { transform: translateX(15px) scale(1.02); } /* Slight scale up */
+          100% { transform: translateX(0) scale(1); }
+        }
+        .player-attacking-lunge {
+          animation: player-lunge 0.3s ease-in-out forwards;
+        }
+
+        /* Slash Effect Animation */
+        @keyframes slash-appear-fade {
+          0% { opacity: 0; transform: scale(0.8) rotate(-15deg); }
+          50% { opacity: 1; transform: scale(1) rotate(-15deg); }
+          100% { opacity: 0; transform: scale(1.1) rotate(-15deg); }
+        }
+        .slash-effect-active {
+          display: block !important; /* Override display: none */
+          animation: slash-appear-fade 0.25s ease-out forwards;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="battle-container">
+        <div id="battle-interface">
+            <div id="enemy-area">
+                <p>哥布林</p> <!-- Enemy Name -->
+                <div class="hp-bar-container">
+                    <div class="hp-bar" id="enemy-hp-bar" style="width: 100%;"></div>
+                </div>
+                <p id="enemy-hp-text">HP: 120/120</p>
+                <!-- TODO: Add enemy image here if desired -->
+                <!-- <img id="enemy-img" src="path/to/enemy.png" alt="哥布林" style="max-height: 100px; margin-top: 10px;"> -->
+            </div>
+
+            <div id="player-section">
+                <div id="player-character-area">
+                    <!-- === UPDATED IMAGE SOURCE === -->
+                    <img id="player-character-img" src="character.png" alt="勇者艾爾">
+                    <!-- === UPDATED IMAGE SOURCE === -->
+                    <img id="slash-effect" src="slash.png" alt="斬擊特效">
+                </div>
+
+                <div id="player-panel">
+                    <div class="player-grid">
+                        <button id="attack-button" class="grid-item action-button">斬擊</button>
+                        <div id="hp-status" class="grid-item status-display">
+                            <span>HP</span>
+                            <div class="hp-bar-container">
+                                <div class="hp-bar" id="player-hp-bar" style="width: 100%;"></div>
+                            </div>
+                            <span id="player-hp-text">100/100</span>
+                        </div>
+
+                        <button id="skill1-button" class="grid-item action-button">火球術 (MP 10)</button>
+                        <div id="mp-status" class="grid-item status-display">
+                            <span>MP</span>
+                            <div class="mp-bar-container">
+                                <div class="mp-bar" id="player-mp-bar" style="width: 100%;"></div>
+                            </div>
+                            <span id="player-mp-text">50/50</span>
+                        </div>
+
+                        <button id="skill2-button" class="grid-item action-button">治療術 (MP 15)</button>
+                        <button id="bag-button" class="grid-item action-button">背包</button>
+                    </div>
+                </div>
+            </div>
+        </div> <!-- Closing battle-interface div -->
+
+        <div id="message-log">戰鬥開始！</div>
+
+    </div> <!-- Closing battle-container div -->
+
+    <script>
+        // --- DOM Element References ---
+        const attackButton = document.getElementById('attack-button');
+        const skill1Button = document.getElementById('skill1-button');
+        const skill2Button = document.getElementById('skill2-button');
+        const bagButton = document.getElementById('bag-button');
+
+        const playerHpBar = document.getElementById('player-hp-bar');
+        const playerHpText = document.getElementById('player-hp-text');
+        const playerMpBar = document.getElementById('player-mp-bar');
+        const playerMpText = document.getElementById('player-mp-text');
+
+        const enemyHpBar = document.getElementById('enemy-hp-bar');
+        const enemyHpText = document.getElementById('enemy-hp-text');
+
+        const messageLog = document.getElementById('message-log');
+
+        // Animation Elements
+        const playerImage = document.getElementById('player-character-img');
+        const slashEffect = document.getElementById('slash-effect');
+
+        // --- Game Data (Simplified) ---
+        let player = {
+            name: "勇者艾爾", // Name matches the status image provided
+            maxHp: 100,
+            currentHp: 100,
+            maxMp: 50,
+            currentMp: 50,
+            attackPower: 15, // Base attack for "斬擊"
+            skills: [
+                { name: "火球術", mpCost: 10, damage: 25, type: 'damage' }, // Corresponds to a skill/attack type
+                { name: "治療術", mpCost: 15, heal: 30, type: 'heal' } // Example healing skill
+                // Add "冰霜護盾" or "火焰彈" here if needed, adjusting UI buttons too
+            ]
+        };
+
+        let enemy = {
+            name: "哥布林",
+            maxHp: 120,
+            currentHp: 120,
+            attackPower: 10,
+            defense: 5 // Player's attack will be reduced by this
+        };
+
+        let isPlayerTurn = true;
+        let battleEnded = false;
+
+        // --- UI Update Function ---
+        function updateUI() {
+            // Player HP
+            const playerHpPercent = Math.max(0, (player.currentHp / player.maxHp) * 100);
+            playerHpBar.style.width = playerHpPercent + '%';
+            playerHpText.textContent = `${player.currentHp}/${player.maxHp}`;
+
+            // Player MP
+            const playerMpPercent = Math.max(0, (player.currentMp / player.maxMp) * 100);
+            playerMpBar.style.width = playerMpPercent + '%';
+            playerMpText.textContent = `${player.currentMp}/${player.maxMp}`;
+
+            // Enemy HP
+            const enemyHpPercent = Math.max(0, (enemy.currentHp / enemy.maxHp) * 100);
+            enemyHpBar.style.width = enemyHpPercent + '%';
+            enemyHpText.textContent = `HP: ${enemy.currentHp}/${enemy.maxHp}`;
+
+            // Enable/disable buttons based on turn and resources
+            attackButton.disabled = !isPlayerTurn || battleEnded;
+            skill1Button.disabled = !isPlayerTurn || battleEnded || player.currentMp < player.skills[0].mpCost;
+            skill2Button.disabled = !isPlayerTurn || battleEnded || player.currentMp < player.skills[1].mpCost;
+            bagButton.disabled = !isPlayerTurn || battleEnded;
+
+             // Change HP bar color based on health
+            if (playerHpPercent < 30) {
+                playerHpBar.style.backgroundColor = '#f44336'; // Red
+            } else if (playerHpPercent < 60) {
+                 playerHpBar.style.backgroundColor = '#ff9800'; // Orange
+            } else {
+                playerHpBar.style.backgroundColor = '#4CAF50'; // Green
+            }
+
+             if (enemyHpPercent < 30) {
+                enemyHpBar.style.backgroundColor = '#f44336'; // Red
+            } else if (enemyHpPercent < 60) {
+                 enemyHpBar.style.backgroundColor = '#ff9800'; // Orange
+            } else {
+                enemyHpBar.style.backgroundColor = '#4CAF50'; // Green (or maybe slightly different green for enemy)
+            }
+        }
+
+        // --- Message Logging ---
+        function logMessage(message) {
+            messageLog.innerHTML = message + '<br>' + messageLog.innerHTML;
+            messageLog.scrollTop = 0; // Scroll to top to see latest message
+            console.log(message); // Also log to console for debugging
+        }
+
+        // --- Animation Trigger Function ---
+        function triggerAttackAnimation() {
+            if (playerImage.classList.contains('player-attacking-lunge')) {
+                return; // Don't restart if already animating
+            }
+            playerImage.classList.add('player-attacking-lunge');
+            slashEffect.classList.add('slash-effect-active');
+
+            // Remove classes after animation finishes (use longest duration)
+            setTimeout(() => {
+                playerImage.classList.remove('player-attacking-lunge');
+                // Don't remove slash-effect-active immediately, let its fade-out finish
+            }, 300); // Duration of player-lunge animation
+             // Remove slash effect class after its own animation finishes
+             setTimeout(() => {
+                slashEffect.classList.remove('slash-effect-active');
+             }, 250); // Duration of slash-appear-fade animation
+        }
+
+        // --- Battle Logic Functions ---
+
+        // Wrapper for player actions to handle turn change and checks
+        function playerTurnAction(actionFn, endsTurn = true) {
+            if (!isPlayerTurn || battleEnded) return;
+
+            // Execute the core action (attack, skill use, etc.)
+            const canProceed = actionFn(); // Action function might return false if it failed (e.g., MP insufficient)
+
+            // If the action was invalid (like insufficient MP) and shouldn't end the turn
+            if (canProceed === false && !endsTurn) {
+                 // Maybe log a specific message indicating action failed but turn continues
+                 // logMessage("無法執行動作！"); // Example
+                 isPlayerTurn = true; // Ensure turn remains with player
+                 updateUI(); // Re-enable buttons if they were disabled by actionFn
+                 return; // Stop further processing for this turn
+            }
+
+
+            // If the action *does* end the turn (default)
+            if (endsTurn) {
+                 isPlayerTurn = false; // Player's action taken, end their ability to act
+                 updateUI(); // Disable buttons immediately
+
+                 // Check for battle end immediately after player action
+                 if (checkBattleEnd()) return;
+
+                 // If battle continues, delay enemy turn
+                 logMessage("..."); // Pause indicator
+                 setTimeout(enemyTurn, 1500); // Delay for enemy turn (1.5 seconds)
+            } else {
+                 // Action doesn't end turn (e.g., opening bag menu - not fully implemented yet)
+                 // Keep isPlayerTurn = true
+                 updateUI(); // Update UI maybe needed if action changed something minor
+            }
+        }
+
+
+        function playerAttack() {
+             logMessage(`${player.name} 發動了斬擊！`);
+             triggerAttackAnimation(); // Trigger animation
+
+             // Simplified damage calculation (Attack Power - Enemy Defense)
+             // Add randomness: +/- 20% damage variation
+             const damageMultiplier = 0.8 + Math.random() * 0.4; // Random factor between 0.8 and 1.2
+             const baseDamage = Math.max(1, player.attackPower - enemy.defense);
+             const actualDamage = Math.round(baseDamage * damageMultiplier);
+
+             enemy.currentHp = Math.max(0, enemy.currentHp - actualDamage);
+             logMessage(`對 ${enemy.name} 造成了 ${actualDamage} 點傷害。`);
+             updateUI(); // Update UI immediately after damage calculation
+             return true; // Action was successful
+        }
+
+        function playerUseSkill(skillIndex) {
+            const skill = player.skills[skillIndex];
+
+            if (player.currentMp >= skill.mpCost) {
+                player.currentMp -= skill.mpCost;
+                logMessage(`${player.name} 使用了 ${skill.name}！ (消耗 ${skill.mpCost} MP)`);
+
+                // TODO: Add specific skill animations here (different from basic attack)
+                // Example: triggerSkillAnimation(skill.name);
+
+                if (skill.type === 'damage') {
+                     // Add randomness/defense calculation for skills too?
+                     const baseDamage = skill.damage; // Use skill's base damage
+                     // Let's make skills ignore defense for simplicity, or add specific logic
+                     const actualDamage = Math.round(baseDamage * (0.9 + Math.random() * 0.2)); // +/- 10% variation for skills
+                     enemy.currentHp = Math.max(0, enemy.currentHp - actualDamage);
+                    logMessage(`對 ${enemy.name} 造成了 ${actualDamage} 點傷害。`);
+                } else if (skill.type === 'heal') {
+                    const healAmount = skill.heal;
+                    const healedHp = Math.min(player.maxHp, player.currentHp + healAmount);
+                    const actualHeal = healedHp - player.currentHp; // Calculate actual HP restored
+                    player.currentHp = healedHp;
+                    logMessage(`${player.name} 恢復了 ${actualHeal} 點 HP。`);
+                }
+                 updateUI(); // Update UI after skill effect
+                 return true; // Skill used successfully
+            } else {
+                logMessage("MP 不足，無法使用此技能！");
+                // Don't change isPlayerTurn here, let playerTurnAction handle it
+                 updateUI(); // Re-enable buttons if needed
+                 return false; // Indicate action failed due to insufficient MP
+            }
+        }
+
+        function openBag() {
+            logMessage(`${player.name} 打開了背包... (功能待實現)`);
+            // TODO: Implement inventory logic here.
+            // This action likely should NOT immediately end the turn.
+            // It should open a bag UI, and *using* an item might end the turn.
+            // For now, we return true but tell playerTurnAction not to end the turn.
+             return true; // Indicate the "open bag" action itself happened
+        }
+
+        function enemyTurn() {
+             if (battleEnded) return;
+            logMessage(`輪到 ${enemy.name} 的回合！`);
+
+            // Simple AI: Just attack
+            // TODO: Add enemy attack animation/effect
+
+            // Add slight delay for enemy "thinking" or animation
+            setTimeout(() => {
+                const damageMultiplier = 0.8 + Math.random() * 0.4; // Random factor
+                const baseDamage = Math.max(1, enemy.attackPower); // TODO: Factor in player defense
+                const actualDamage = Math.round(baseDamage * damageMultiplier);
+
+                player.currentHp = Math.max(0, player.currentHp - actualDamage);
+                logMessage(`${enemy.name} 攻擊！${player.name} 受到了 ${actualDamage} 點傷害。`);
+
+                updateUI(); // Update UI after damage
+
+                if (checkBattleEnd()) return; // Check end state after enemy attack resolves
+
+                // End enemy turn, back to player
+                isPlayerTurn = true;
+                logMessage(`輪到 ${player.name} 了。`);
+                updateUI(); // Re-enable player buttons
+            }, 700); // Delay enemy action slightly for effect (e.g., 0.7 seconds)
+        }
+
+
+        function checkBattleEnd() {
+            if (enemy.currentHp <= 0) {
+                logMessage(`擊敗了 ${enemy.name}！戰鬥勝利！ 🎉`);
+                battleEnded = true;
+                isPlayerTurn = false; // No more turns
+                updateUI(); // Disable all buttons permanently
+                // Could trigger a victory sequence here
+                return true; // Battle ended
+            } else if (player.currentHp <= 0) {
+                logMessage(`${player.name} 的 HP 歸零... 戰鬥失敗... 💀`);
+                battleEnded = true;
+                isPlayerTurn = false; // No more turns
+                updateUI(); // Disable all buttons permanently
+                 // Could trigger a game over sequence here
+                return true; // Battle ended
+            }
+             return false; // Battle continues
+        }
+
+
+        // --- Event Listeners ---
+        attackButton.addEventListener('click', () => playerTurnAction(playerAttack)); // Default: ends turn
+        skill1Button.addEventListener('click', () => playerTurnAction(() => playerUseSkill(0))); // Pass skill index, ends turn if successful
+        skill2Button.addEventListener('click', () => playerTurnAction(() => playerUseSkill(1))); // Pass skill index, ends turn if successful
+        // For the bag, we specify that opening it does NOT end the turn immediately.
+        // Using an item *from* the bag would likely call playerTurnAction with endsTurn=true.
+        bagButton.addEventListener('click', () => playerTurnAction(openBag, false));
+
+
+        // --- Initial Setup ---
+        // Use DOMContentLoaded to ensure HTML is parsed before script runs heavily
+         document.addEventListener('DOMContentLoaded', () => {
+            logMessage("戰鬥介面初始化...");
+            updateUI(); // Initial UI setup
+            logMessage(`遭遇 ${enemy.name}！輪到 ${player.name} 了。`);
+        });
+
+    </script>
+
+</body>
+</html>
